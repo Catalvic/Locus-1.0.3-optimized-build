@@ -1,6 +1,6 @@
 # Locus 1.0.3 (4) 汉化增强稳定优化版
 
-[![Build unsigned IPA](https://github.com/Catalvic/Locus-1.0.3-optimized-build/actions/workflows/build-unsigned.yml/badge.svg)](https://github.com/Catalvic/Locus-1.0.3-optimized-build/actions/workflows/build-unsigned.yml)
+[![Build unsigned IPA](https://github.com/Catalvic/Locus-1.0.3-optimized-build/actions/workflows/build-locus.yml/badge.svg)](https://github.com/Catalvic/Locus-1.0.3-optimized-build/actions/workflows/build-locus.yml)
 
 免费、开源的 iPhone 系统级虚拟定位工具。可在地图上选点或搜索地点后传送位置，也包含摇杆、道路路线、手绘路线、GPX、收藏、最近使用、Live Activity、本地备份和中国大陆坐标修正。
 
