@@ -1,0 +1,86 @@
+name: Build optimized unsigned IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '*.zip'
+      - '.github/workflows/build-locus.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract verified source
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE_ZIP="$(find "$GITHUB_WORKSPACE" -maxdepth 1 -type f -name '*.zip' -print -quit)"
+          test -n "$SOURCE_ZIP"
+          mkdir -p "$GITHUB_WORKSPACE/extracted"
+          ditto -x -k "$SOURCE_ZIP" "$GITHUB_WORKSPACE/extracted"
+          SOURCE_DIR="$(find "$GITHUB_WORKSPACE/extracted" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          test -d "$SOURCE_DIR"
+          echo "SOURCE_DIR=$SOURCE_DIR" >> "$GITHUB_ENV"
+          echo "Building source from: $SOURCE_DIR"
+
+      - name: Verify optimized source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$SOURCE_DIR"
+          python3 verify_optimized_source.py
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$SOURCE_DIR"
+          xcodegen generate
+
+      - name: Build unsigned Release app
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$SOURCE_DIR"
+          mkdir -p build
+          set -o pipefail
+          xcodebuild             -project Locus.xcodeproj             -scheme Locus             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$SOURCE_DIR/build/DerivedData"             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=''             DEVELOPMENT_TEAM=''             COPY_PHASE_STRIP=YES             STRIP_INSTALLED_PRODUCT=YES             STRIP_SWIFT_SYMBOLS=YES             DEPLOYMENT_POSTPROCESSING=YES             clean build | tee "$SOURCE_DIR/build/xcodebuild.log"
+
+      - name: Verify extension and package IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="$SOURCE_DIR/build/DerivedData/Build/Products/Release-iphoneos/Locus.app"
+          EXTENSION="$APP/PlugIns/LocusLiveActivity.appex"
+          test -d "$APP"
+          test -d "$EXTENSION"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :NSSupportsLiveActivities' "$APP/Info.plist")" = "true"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :NSSupportsLiveActivities' "$EXTENSION/Info.plist")" = "true"
+          mkdir -p "$SOURCE_DIR/build/Payload"
+          ditto "$APP" "$SOURCE_DIR/build/Payload/Locus.app"
+          cd "$SOURCE_DIR/build"
+          /usr/bin/zip -qry Locus-1.0.3-optimized-unsigned.ipa Payload
+          /usr/bin/unzip -t Locus-1.0.3-optimized-unsigned.ipa
+          /usr/bin/shasum -a 256 Locus-1.0.3-optimized-unsigned.ipa | tee Locus-1.0.3-optimized-unsigned.sha256
+
+      - name: Upload unsigned IPA and build log
+        uses: actions/upload-artifact@v4
+        with:
+          name: Locus-1.0.3-optimized-unsigned
+          path: |
+            extracted/*/build/Locus-1.0.3-optimized-unsigned.ipa
+            extracted/*/build/Locus-1.0.3-optimized-unsigned.sha256
+            extracted/*/build/xcodebuild.log
+          if-no-files-found: error
+          retention-days: 14
